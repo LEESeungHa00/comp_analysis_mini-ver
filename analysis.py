@@ -283,21 +283,100 @@ if st.session_state.get('market_analysis_done', False):
                 customer_exporters_in_year = exporter_analysis_df[exporter_analysis_df['masked_name'] == masked_customer_name]['Exporter'].unique()
                 st.info(f"**{customer_name}**가 {selected_year_exporter}년에 거래한 공급사: **{', '.join(customer_exporters_in_year)}**")
 
-                for exporter in customer_exporters_in_year:
-                    st.markdown(f"--- \n #### 공급사 '{exporter}' 비교 분석")
-                    single_exporter_df = exporter_analysis_df[exporter_analysis_df['Exporter'] == exporter]
-                    
-                    st.subheader(f"단가 분포 비교")
-                    top_10_importers_by_vol = single_exporter_df.groupby('masked_name')['volume'].sum().nlargest(10).index
-                    single_exporter_df_top10 = single_exporter_df[single_exporter_df['masked_name'].isin(top_10_importers_by_vol)]
-                    
-                    importers_in_plot = single_exporter_df_top10['masked_name'].unique()
-                    competitors = [imp for imp in importers_in_plot if imp != masked_customer_name]
-                    blue_shades = px.colors.sequential.Blues_r
-                    color_map_box = {comp: blue_shades[i % len(blue_shades)] for i, comp in enumerate(competitors)}
-                    color_map_box[masked_customer_name] = 'red'
+                    for exporter in customer_exporters_in_year:
+                        st.markdown(f"--- \n #### 공급사 '{exporter}' 비교 분석")
+                        single_exporter_df = exporter_analysis_df[exporter_analysis_df['Exporter'] == exporter]
+                        
+                        st.subheader(f"Volume 및 평균 단가 비교")
+                        importer_summary = single_exporter_df.groupby('importer_name').agg(
+                            total_volume=('volume', 'sum'),
+                            avg_unit_price=('unit_price', 'mean')
+                        ).sort_values('total_volume', ascending=False).reset_index()
 
-                    fig10 = px.box(single_exporter_df_top10, x='masked_name', y='unit_price', 
-                                   title=f"<b>'{exporter}' 거래 업체별 단가 분포</b><br><span style='font-size: 0.8em; color:grey;'>수입 중량 기준 상위 10개 수입사</span>", 
-                                   labels={'masked_name': '수입사', 'unit_price': '단가(USD/KG)'}, color='masked_name', color_discrete_map=color_map_box)
-                    st.plotly_chart(fig10, use_container_width=True)
+                        fig8 = go.Figure()
+                        fig8.add_trace(go.Bar(
+                            x=importer_summary['importer_name'],
+                            y=importer_summary['total_volume'],
+                            name='총 수입량(KG)',
+                            marker_color=['red' if imp == customer_name else 'lightskyblue' for imp in importer_summary['importer_name']]
+                        ))
+                        fig8.add_trace(go.Scatter(
+                            x=importer_summary['importer_name'],
+                            y=importer_summary['avg_unit_price'],
+                            name='평균 수입단가(USD/KG)',
+                            yaxis='y2',
+                            mode='lines+markers',
+                            line=dict(color='orange')
+                        ))
+                        fig8.update_layout(
+                            title=f"<b>'{exporter}' 거래 업체별 Volume 및 평균 단가</b>",
+                            xaxis_title='수입사',
+                            yaxis=dict(title='총 수입량(KG)'),
+                            yaxis2=dict(title='평균 수입단가(USD/KG)', overlaying='y', side='right'),
+                            legend=dict(x=0, y=1.1, orientation='h')
+                        )
+                        st.plotly_chart(fig8, use_container_width=True)
+
+                        st.subheader(f"단가 분포 비교")
+                        top_10_importers_by_vol = single_exporter_df.groupby('importer_name')['volume'].sum().nlargest(10).index
+                        single_exporter_df_top10 = single_exporter_df[single_exporter_df['importer_name'].isin(top_10_importers_by_vol)]
+                        
+                        importers_in_plot = single_exporter_df_top10['importer_name'].unique()
+                        competitors = [imp for imp in importers_in_plot if imp != customer_name]
+                        blue_shades = px.colors.sequential.Blues_r
+                        color_map_box = {comp: blue_shades[i % len(blue_shades)] for i, comp in enumerate(competitors)}
+                        color_map_box[customer_name] = 'red'
+
+                        fig10 = px.box(single_exporter_df_top10, x='importer_name', y='unit_price', 
+                                       title=f"<b>'{exporter}' 거래 업체별 단가 분포</b><br><span style='font-size: 0.8em; color:grey;'>수입 중량 기준 상위 10개 수입사</span>", 
+                                       labels={'importer_name': '수입사', 'unit_price': '단가(USD/KG)'}, color='importer_name', color_discrete_map=color_map_box)
+                        st.plotly_chart(fig10, use_container_width=True)
+                        with st.expander("상세 데이터 보기"):
+                            summary_df_imp = single_exporter_df_top10.groupby('importer_name')['unit_price'].agg(['max', 'mean', 'min']).reset_index()
+                            summary_df_imp.columns = ['수입사', '최대 단가(USD/KG)', '평균 단가(USD/KG)', '최소 단가(USD/KG)']
+                            st.dataframe(summary_df_imp.style.format({'최대 단가(USD/KG)': '${:,.2f}', '평균 단가(USD/KG)': '${:,.2f}', '최소 단가(USD/KG)': '${:,.2f}'}))
+
+                    st.subheader(f"{selected_year_exporter}년 분기별 대안 소싱 옵션")
+                    customer_origins = exporter_analysis_df[exporter_analysis_df['importer_name'] == customer_name]['origin_country'].unique()
+                    avg_prices = exporter_analysis_df.groupby(['quarter', 'Exporter', 'origin_country']).agg(avg_price=('unit_price', 'mean'), representative_product=('product_name', 'first')).reset_index()
+                    
+                    for q in range(1, 5):
+                        st.markdown(f"--- \n #### {q}분기")
+                        q_df = avg_prices[avg_prices['quarter'] == q]
+                        if q_df.empty:
+                            st.write("- 해당 분기에 거래 데이터가 없습니다.")
+                            continue
+                        
+                        st.markdown("**현재 소싱 옵션**")
+                        customer_exporters_q_df = q_df[q_df['Exporter'].isin(customer_exporters_in_year)].sort_values('avg_price')
+                        if not customer_exporters_q_df.empty:
+                            st.dataframe(customer_exporters_q_df[['Exporter', 'avg_price']].rename(columns={'Exporter': '공급사', 'avg_price': '평균 단가(USD/KG)'}).style.format({'평균 단가(USD/KG)': '${:,.2f}'}))
+                        else:
+                            st.write("- 공급사 거래 없음")
+                        customer_origins_q_df = q_df[q_df['origin_country'].isin(customer_origins)].groupby('origin_country')['avg_price'].mean().reset_index().sort_values('avg_price')
+                        if not customer_origins_q_df.empty:
+                            st.dataframe(customer_origins_q_df.rename(columns={'origin_country': '원산지', 'avg_price': '평균 단가(USD/KG)'}).style.format({'평균 단가(USD/KG)': '${:,.2f}'}))
+                        else:
+                            st.write("- 원산지 거래 없음")
+
+                        st.markdown("**대안 추천 옵션**")
+                        customer_avg_price_q = q_df[q_df['Exporter'].isin(customer_exporters_in_year)]['avg_price'].mean()
+                        if not pd.isna(customer_avg_price_q):
+                            cheaper_exporters = q_df[(~q_df['Exporter'].isin(customer_exporters_in_year)) & (q_df['avg_price'] < customer_avg_price_q)].sort_values('avg_price')
+                            if not cheaper_exporters.empty:
+                                st.dataframe(cheaper_exporters[['Exporter', 'representative_product', 'avg_price']].rename(columns={'Exporter': '추천 공급사', 'representative_product': '대표 품목', 'avg_price': '평균 단가(USD/KG)'}).style.format({'평균 단가(USD/KG)': '${:,.2f}'}))
+                            else:
+                                st.write("- 더 저렴한 공급사 없음")
+                        
+                        customer_origin_avg_price_q = q_df[q_df['origin_country'].isin(customer_origins)].groupby('origin_country')['avg_price'].mean().mean()
+                        if not pd.isna(customer_origin_avg_price_q):
+                            cheaper_origins = q_df.groupby('origin_country')['avg_price'].mean().reset_index()
+                            cheaper_origins = cheaper_origins[(~cheaper_origins['origin_country'].isin(customer_origins)) & (cheaper_origins['avg_price'] < customer_origin_avg_price_q)].sort_values('avg_price')
+                            if not cheaper_origins.empty:
+                                st.dataframe(cheaper_origins.rename(columns={'origin_country': '추천 원산지', 'avg_price': '평균 단가(USD/KG)'}).style.format({'평균 단가(USD/KG)': '${:,.2f}'}))
+                            else:
+                                st.write("- 더 저렴한 원산지 없음")
+        else:
+            st.warning("'Exporter' 또는 'Origin Country' 컬럼이 없어 공급망 분석을 수행할 수 없습니다.")
+
+
