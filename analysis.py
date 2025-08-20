@@ -283,7 +283,7 @@ if st.session_state.get('market_analysis_done', False):
                 customer_exporters_in_year = exporter_analysis_df[exporter_analysis_df['masked_name'] == masked_customer_name]['Exporter'].unique()
                 st.info(f"**{customer_name}**가 {selected_year_exporter}년에 거래한 공급사: **{', '.join(customer_exporters_in_year)}**")
 
-                    for exporter in customer_exporters_in_year:
+                        for exporter in customer_exporters_in_year:
                         st.markdown(f"--- \n #### 공급사 '{exporter}' 비교 분석")
                         single_exporter_df = exporter_analysis_df[exporter_analysis_df['Exporter'] == exporter]
                         
