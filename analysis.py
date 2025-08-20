@@ -283,60 +283,57 @@ if st.session_state.get('market_analysis_done', False):
                 customer_exporters_in_year = exporter_analysis_df[exporter_analysis_df['masked_name'] == masked_customer_name]['Exporter'].unique()
                 st.info(f"**{customer_name}**가 {selected_year_exporter}년에 거래한 공급사: **{', '.join(customer_exporters_in_year)}**")
 
-                        for exporter in customer_exporters_in_year:
-                        st.markdown(f"--- \n #### 공급사 '{exporter}' 비교 분석")
-                        single_exporter_df = exporter_analysis_df[exporter_analysis_df['Exporter'] == exporter]
+                    for exporter in customer_exporters_in_year:
+                    st.markdown(f"--- \n #### 공급사 '{exporter}' 비교 분석")
+                    single_exporter_df = exporter_analysis_df[exporter_analysis_df['Exporter'] == exporter]
                         
-                        st.subheader(f"Volume 및 평균 단가 비교")
-                        importer_summary = single_exporter_df.groupby('importer_name').agg(
-                            total_volume=('volume', 'sum'),
-                            avg_unit_price=('unit_price', 'mean')
-                        ).sort_values('total_volume', ascending=False).reset_index()
+                    st.subheader(f"Volume 및 평균 단가 비교")
+                    importer_summary = single_exporter_df.groupby('importer_name').agg(
+                        total_volume=('volume', 'sum'),
+                        avg_unit_price=('unit_price', 'mean')
+                    ).sort_values('total_volume', ascending=False).reset_index()
 
-                        fig8 = go.Figure()
-                        fig8.add_trace(go.Bar(
-                            x=importer_summary['importer_name'],
-                            y=importer_summary['total_volume'],
-                            name='총 수입량(KG)',
-                            marker_color=['red' if imp == customer_name else 'lightskyblue' for imp in importer_summary['importer_name']]
-                        ))
-                        fig8.add_trace(go.Scatter(
-                            x=importer_summary['importer_name'],
-                            y=importer_summary['avg_unit_price'],
-                            name='평균 수입단가(USD/KG)',
-                            yaxis='y2',
-                            mode='lines+markers',
-                            line=dict(color='orange')
-                        ))
-                        fig8.update_layout(
-                            title=f"<b>'{exporter}' 거래 업체별 Volume 및 평균 단가</b>",
-                            xaxis_title='수입사',
-                            yaxis=dict(title='총 수입량(KG)'),
-                            yaxis2=dict(title='평균 수입단가(USD/KG)', overlaying='y', side='right'),
-                            legend=dict(x=0, y=1.1, orientation='h')
-                        )
-                        st.plotly_chart(fig8, use_container_width=True)
-
-                        st.subheader(f"단가 분포 비교")
-                        top_10_importers_by_vol = single_exporter_df.groupby('importer_name')['volume'].sum().nlargest(10).index
-                        single_exporter_df_top10 = single_exporter_df[single_exporter_df['importer_name'].isin(top_10_importers_by_vol)]
+                    fig8 = go.Figure()
+                    fig8.add_trace(go.Bar(
+                        x=importer_summary['importer_name'],
+                        y=importer_summary['total_volume'],
+                        name='총 수입량(KG)',
+                        marker_color=['red' if imp == customer_name else 'lightskyblue' for imp in importer_summary['importer_name']]
+                    ))
+                    fig8.add_trace(go.Scatter(
+                        x=importer_summary['importer_name'],
+                        y=importer_summary['avg_unit_price'],
+                        name='평균 수입단가(USD/KG)',
+                        yaxis='y2',
+                        mode='lines+markers',
+                        line=dict(color='orange')
+                    ))
+                    fig8.update_layout(
+                        title=f"<b>'{exporter}' 거래 업체별 Volume 및 평균 단가</b>",
+                        xaxis_title='수입사',
+                        yaxis=dict(title='총 수입량(KG)'),
+                        yaxis2=dict(title='평균 수입단가(USD/KG)', overlaying='y', side='right'),
+                        legend=dict(x=0, y=1.1, orientation='h')
+                    )
+                    st.plotly_chart(fig8, use_container_width=True)
+                    st.subheader(f"단가 분포 비교")
+                    top_10_importers_by_vol = single_exporter_df.groupby('importer_name')['volume'].sum().nlargest(10).index
+                    single_exporter_df_top10 = single_exporter_df[single_exporter_df['importer_name'].isin(top_10_importers_by_vol)]
                         
-                        importers_in_plot = single_exporter_df_top10['importer_name'].unique()
-                        competitors = [imp for imp in importers_in_plot if imp != customer_name]
-                        blue_shades = px.colors.sequential.Blues_r
-                        color_map_box = {comp: blue_shades[i % len(blue_shades)] for i, comp in enumerate(competitors)}
-                        color_map_box[customer_name] = 'red'
-
-                        fig10 = px.box(single_exporter_df_top10, x='importer_name', y='unit_price', 
-                                       title=f"<b>'{exporter}' 거래 업체별 단가 분포</b><br><span style='font-size: 0.8em; color:grey;'>수입 중량 기준 상위 10개 수입사</span>", 
-                                       labels={'importer_name': '수입사', 'unit_price': '단가(USD/KG)'}, color='importer_name', color_discrete_map=color_map_box)
-                        st.plotly_chart(fig10, use_container_width=True)
-                        with st.expander("상세 데이터 보기"):
-                            summary_df_imp = single_exporter_df_top10.groupby('importer_name')['unit_price'].agg(['max', 'mean', 'min']).reset_index()
-                            summary_df_imp.columns = ['수입사', '최대 단가(USD/KG)', '평균 단가(USD/KG)', '최소 단가(USD/KG)']
-                            st.dataframe(summary_df_imp.style.format({'최대 단가(USD/KG)': '${:,.2f}', '평균 단가(USD/KG)': '${:,.2f}', '최소 단가(USD/KG)': '${:,.2f}'}))
-
-                    st.subheader(f"{selected_year_exporter}년 분기별 대안 소싱 옵션")
+                    importers_in_plot = single_exporter_df_top10['importer_name'].unique()
+                    competitors = [imp for imp in importers_in_plot if imp != customer_name]
+                    blue_shades = px.colors.sequential.Blues_r
+                    color_map_box = {comp: blue_shades[i % len(blue_shades)] for i, comp in enumerate(competitors)}
+                    color_map_box[customer_name] = 'red'
+                    fig10 = px.box(single_exporter_df_top10, x='importer_name', y='unit_price', 
+                                   title=f"<b>'{exporter}' 거래 업체별 단가 분포</b><br><span style='font-size: 0.8em; color:grey;'>수입 중량 기준 상위 10개 수입사</span>", 
+                                   labels={'importer_name': '수입사', 'unit_price': '단가(USD/KG)'}, color='importer_name', color_discrete_map=color_map_box)
+                    st.plotly_chart(fig10, use_container_width=True)
+                    with st.expander("상세 데이터 보기"):
+                        summary_df_imp = single_exporter_df_top10.groupby('importer_name')['unit_price'].agg(['max', 'mean', 'min']).reset_index()
+                        summary_df_imp.columns = ['수입사', '최대 단가(USD/KG)', '평균 단가(USD/KG)', '최소 단가(USD/KG)']
+                        st.dataframe(summary_df_imp.style.format({'최대 단가(USD/KG)': '${:,.2f}', '평균 단가(USD/KG)': '${:,.2f}', '최소 단가(USD/KG)': '${:,.2f}'}))
+                        st.subheader(f"{selected_year_exporter}년 분기별 대안 소싱 옵션")
                     customer_origins = exporter_analysis_df[exporter_analysis_df['importer_name'] == customer_name]['origin_country'].unique()
                     avg_prices = exporter_analysis_df.groupby(['quarter', 'Exporter', 'origin_country']).agg(avg_price=('unit_price', 'mean'), representative_product=('product_name', 'first')).reset_index()
                     
